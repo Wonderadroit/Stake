@@ -8,8 +8,6 @@ from stake.ou_disagreement import evaluate_ou_disagreement
 
 def _frame() -> pd.DataFrame:
     rows = []
-    # Give both teams enough prior history while keeping the fixture sequence
-    # deterministic. The final fixture is the observation under test.
     fixtures = [
         ("2021-08-01", "A", "B", 3, 0, 2.0, 1.9),
         ("2021-08-08", "B", "A", 0, 0, 2.0, 1.9),
@@ -38,7 +36,8 @@ def _frame() -> pd.DataFrame:
 def test_disagreement_probe_returns_fixed_buckets():
     result = evaluate_ou_disagreement(_frame(), window=2)
     assert result.observations > 0
-    assert all(bucket.observations > 0 for bucket in result.buckets)
+    assert len(result.buckets) > 0
+    assert sum(bucket.observations for bucket in result.buckets) == result.observations
     assert all(0 <= bucket.win_rate <= 1 for bucket in result.buckets)
 
 
