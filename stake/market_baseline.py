@@ -15,6 +15,17 @@ def _valid_odds(value: object) -> bool:
         return False
 
 
+def _valid_ah_line(value: object) -> bool:
+    try:
+        line = float(value)
+        if not math.isfinite(line):
+            return False
+        quarter_units = round(line * 4)
+        return abs(line * 4 - quarter_units) <= 1e-9
+    except (TypeError, ValueError):
+        return False
+
+
 def _fair_probs(row: dict[str, object], first: str, second: str) -> tuple[float | None, float | None]:
     if not (_valid_odds(row.get(first)) and _valid_odds(row.get(second))):
         return None, None
@@ -26,7 +37,7 @@ def prepare_market_baseline(frame: pd.DataFrame) -> pd.DataFrame:
 
     Only opening/closing prices, match identity, and final result are used.
     Post-match statistics such as shots, corners, cards, and possession are
-    deliberately ignored.
+    deliberately ignored. Missing market observations remain missing.
     """
     validate_market_columns(frame)
     result = frame.copy()
@@ -50,8 +61,10 @@ def prepare_market_baseline(frame: pd.DataFrame) -> pd.DataFrame:
         p_home, p_away = _fair_probs(row, "AvgAHH", "AvgAHA")
         p_close_home, p_close_away = _fair_probs(row, "AvgCAHH", "AvgCAHA")
 
-        if p_home is not None:
-            home_settle = asian_handicap_settlement(int(row["FTHG"]), int(row["FTAG"]), float(row["AHh"]))
+        if p_home is not None and _valid_ah_line(row.get("AHh")):
+            home_settle = asian_handicap_settlement(
+                int(row["FTHG"]), int(row["FTAG"]), float(row["AHh"])
+            )
             away_settle = -home_settle
         else:
             home_settle = away_settle = None
@@ -71,10 +84,14 @@ def prepare_market_baseline(frame: pd.DataFrame) -> pd.DataFrame:
         columns["OUOverCloseProb"].append(p_close_over)
         columns["OUUnderCloseProb"].append(p_close_under)
         columns["OUOverSettlement"].append(
-            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), True) if p_over is not None else None
+            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), True)
+            if p_over is not None
+            else None
         )
         columns["OUUnderSettlement"].append(
-            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), False) if p_under is not None else None
+            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), False)
+            if p_under is not None
+            else None
         )
 
     for name, values in columns.items():
