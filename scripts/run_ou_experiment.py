@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+# Allow direct execution from the repository root:
+#   python scripts/run_ou_experiment.py
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from stake.data import load_seasons
 from stake.ou_backtest import evaluate_ou_walk_forward
 
 
 def main() -> None:
-    paths = sorted(Path("data/raw").glob("E0_*.csv"))
+    paths = sorted(ROOT.joinpath("data", "raw").glob("E0_*.csv"))
     if not paths:
         raise SystemExit("No data/raw/E0_*.csv files found")
 
@@ -27,7 +34,7 @@ def main() -> None:
     print(f"LogLoss: {result.market_log_loss:.6f}")
     print()
     print("CANDIDATE BETS")
-    print(f"Minimum EV: 3.0%")
+    print("Minimum EV: 3.0%")
     print(f"Count:      {result.candidate_bets}")
     if result.candidate_roi is None:
         print("ROI:        no candidates")
