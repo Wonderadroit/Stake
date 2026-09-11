@@ -13,45 +13,95 @@ No timestamp may be inferred from kickoff, final lineups, scrape time, or a late
 
 ## Source A — Fantasy Premier League time-series snapshots
 
-`martgra/fpl-timeseries-data` documents that the FPL `bootstrap-static` dataset was downloaded every six hours (UTC) and stored as timestamped snapshots. The repository covers the 2020/21-era project and demonstrates the required snapshot architecture.
+`martgra/fpl-timeseries-data` documents `bootstrap-static` snapshots downloaded every six hours UTC and stored with timestamped filenames. FPL's data dictionary defines `news_added` as the timestamp when news was added and also exposes status and chance-of-playing fields.
 
-Relevant fields in FPL player records include `news`, `news_added`, `status`, `chance_of_playing_this_round`, and `chance_of_playing_next_round`.
+A stronger historical recovery is documented by `beeradb/FPL-Armband`: Internet Archive captures were recovered for all six completed seasons 2020/21–2025/26, covering 228/228 gameweeks. Its backfill process selects a crawl strictly before the deadline and then verifies the payload itself to reject post-deadline captures.
 
 **Use:** candidate information-event source.
 
-**Limitation:** this source alone does not provide Asian Handicap market ticks and its historical coverage must be matched fixture-by-fixture before it can support the full AH-04 experiment.
+**Strength:** this provides a defensible point-in-time route instead of reconstructing availability from end-of-season records.
 
-## Source B — OddsPapi historical odds
+**Limitation:** an FPL timestamp proves when FPL recorded information, not that every bookmaker saw it at that exact instant. AH-04 must keep the information timestamp and market timestamp independent.
 
-OddsPapi documents `GET /v4/historical-odds`, which returns timestamped historical odds entries through `createdAt`, grouped by fixture, bookmaker, market, and outcome. The documented endpoint accepts a fixture ID and up to three bookmaker filters.
+## Source B — Timestamped Asian Handicap market history
 
-The current documentation states that historical odds are available from January 2026.
+The strongest public structural candidate currently identified is the Kaggle **European Football Asian Handicap Odds Time-Series** dataset. Its data card states that it contains 7,494 matches across Europe's top five leagues for 2021–2025, including 1,360 EPL matches. It describes approximately 1,500–2,000 timestamped observations per match across 15 bookmakers, with teams, scores, bookmaker, home odds, handicap, away odds, and timestamp.
 
-**Use:** candidate timestamped market source for fixtures covered by that archive.
+The public sample contains EPL, La Liga and Serie A rounds 20–22 of 2024/25: 90 matches and approximately 840 KB. The full dataset is described as approximately 700 MB and available on request.
 
-**Limitation:** it does not currently satisfy Stake's original five-season market-history requirement because the documented archive begins in January 2026. It can therefore support a narrower 2025/26-season experiment only where the required fixtures and markets are actually covered.
+**Use:** candidate timestamped AH market source.
+
+**Strength:** its documented schema contains timestamp + handicap line + both prices, so Stake can measure actual line/price movement rather than inventing a closing handicap line.
+
+**Limitation:** Stake has not yet acquired and verified the sample/full archive locally, and the Kaggle page lists the license as unknown. The full archive therefore cannot yet be treated as an acquired Stake dataset.
 
 ## Source C — The Odds API historical odds
 
-The Odds API documents historical odds snapshots from June 2020, with 10-minute snapshots and 5-minute snapshots from September 2022 for featured markets. Its EPL documentation explicitly lists handicap and totals as featured markets.
+The Odds API documents historical odds snapshots from June 2020, with 10-minute snapshots and 5-minute snapshots from September 2022 for featured markets. Its EPL documentation lists handicap and totals as featured markets.
 
-**Use:** potentially strong market-history source for the full 2021/22–2025/26 study window.
+**Use:** potentially strong market-history source for the full 2021/22–2025/26 window.
 
-**Limitation:** historical access is paid. No Stake code should assume access exists until an actual account/API response is available.
+**Limitation:** historical access is paid. Stake must not assume access until an actual account/API response is available.
+
+## One-fixture qualification protocol
+
+The next gate is deliberately one fixture, not bulk ingestion.
+
+A fixture qualifies only if real source data can produce:
+
+```text
+fixtures.csv
+    fixture_id
+    kickoff_timestamp
+    home_team
+    away_team
+
+information.csv
+    fixture_id
+    information_timestamp
+    event_type
+    event_value
+
+ah_market.csv
+    fixture_id
+    market_timestamp
+    handicap_line
+    home_price
+    away_price
+```
+
+Minimum chronology:
+
+```text
+information_timestamp <= decision_timestamp < kickoff_timestamp
+market_timestamp <= kickoff_timestamp
+```
+
+Then `scripts/run_ah04_window.py` must identify:
+
+```text
+latest AH tick BEFORE information event
+            ↓
+       information event
+            ↓
+first AH tick AFTER event, still before kickoff
+            ↓
+latest AH tick BEFORE kickoff
+```
+
+The window must be manually inspected before bulk ingestion is written.
 
 ## Qualification decision
 
-AH-04 is **not yet cleared for a five-season causal experiment**.
+**AH-04-PROVENANCE-01: PASS (software gate).**
 
-The strongest next path is:
+**Information-source gate: PASS candidate.** Historical FPL captures now have a documented point-in-time recovery method and timestamped news/availability fields.
 
-1. Prove one real 2025/26 EPL fixture using an information snapshot with an explicit timestamp.
-2. Retrieve the same fixture's timestamped Asian Handicap history from a market provider.
-3. Normalize both into Stake's existing `information.csv`, `ah_market.csv`, and `fixtures.csv` contracts.
-4. Run `scripts/run_ah04_window.py`.
-5. Inspect the resulting before/after/close window manually before scaling.
+**Market-source gate: NOT YET PASSED.** The Kaggle AH time-series has the required structure, but Stake has not yet acquired and verified the actual sample/full archive in the experiment environment.
 
-Only after one fixture passes this end-to-end provenance test should Stake build a bulk ingestion adapter.
+**AH-04 historical data gate: NOT YET PASSED.**
+
+No causal market-latency result should be reported until one real fixture passes the complete information → market → kickoff provenance chain.
 
 ## Hard rejection rules
 
@@ -61,11 +111,10 @@ Only after one fixture passes this end-to-end provenance test should Stake build
 - No post-kickoff market tick included in the pre-match window.
 - No post-match player statistics used as information evidence.
 - No fabricated or interpolated timestamps.
+- No claim that an information timestamp proves bookmaker awareness; it only establishes when the source recorded the information.
 
-## Current gate
+## Current next action
 
-**AH-04-PROVENANCE-01: PASS (software gate).**
+Acquire the public AH sample and inspect its actual CSV contents. If one EPL fixture can be joined to a point-in-time FPL information capture, normalize it into Stake's three input contracts and run the existing AH-04 window builder.
 
-**AH-04 historical data gate: NOT YET PASSED.**
-
-The software is ready; the next evidence must come from one real timestamped fixture, not another synthetic test.
+Only after one fixture passes this end-to-end provenance test should Stake build a bulk ingestion adapter.
