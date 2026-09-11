@@ -69,10 +69,8 @@ def asian_handicap_settlement(home_goals: int, away_goals: int, line: float) -> 
     """
     if not isinstance(home_goals, int) or not isinstance(away_goals, int):
         raise TypeError("Goals must be integers")
-    if not -10 <= line <= 10:
-        raise ValueError("Asian Handicap line is outside supported bounds")
 
-    # Asian handicap lines are normally multiples of 0.5 or 0.25.
+    # Asian handicap lines may be half- or quarter-goal increments.
     quarter_units = round(line * 4)
     if abs(line * 4 - quarter_units) > 1e-9:
         raise ValueError("Asian Handicap line must use half- or quarter-goal increments")
