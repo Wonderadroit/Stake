@@ -54,25 +54,39 @@ Result: **failed**. The largest model-vs-handicap gap bucket had strongly negati
 
 ### AH-03 — opening → closing market reaction
 
-The next diagnostic asks a narrower causal question: when the pre-match model disagrees with the opening AH, does the market subsequently reprice in that model's direction?
+The diagnostic asked whether opening AH disagreement predicted subsequent market repricing.
 
-The test:
+The test used only pre-fixture information for model direction, then measured normalized home/away AH probability movement from opening to closing. The standard Football-Data E0 files provide one AH handicap line plus opening and closing AH prices, not a separate closing handicap line, so no closing handicap was invented.
 
-1. Build the goal model strictly from matches before the fixture.
-2. Compare model expected margin with the **opening** AH line.
-3. Freeze that disagreement and its direction.
-4. Measure only afterward whether normalized home/away AH probability moves from opening to closing in the predicted direction.
-5. Bucket the result by fixed disagreement magnitude.
+Result: **failed**. Direction accuracy was only 51.77% across 1,835 directional observations, with no robust monotonic relationship across fixed disagreement buckets. The simple team-history → Poisson → AH pathway was therefore frozen.
 
-The standard Football-Data E0 files provide one AH handicap line plus opening and closing AH prices, but not a separate closing handicap line. Therefore AH-03 measures subsequent repricing through normalized two-way probability rather than inventing a closing handicap.
+### AH-04-PROVENANCE-01 — information timestamp feasibility
 
-Run locally:
+Before attempting an information-latency model, Stake now has a hard provenance gate. A candidate dataset must explicitly provide:
 
-```bash
-python scripts/run_ah_reaction.py
+- fixture ID
+- kickoff timestamp
+- information-event timestamp
+- decision timestamp
+- market timestamp
+- market prices
+
+A row is eligible only when:
+
+```text
+information_timestamp <= decision_timestamp < kickoff_timestamp
+market_timestamp <= kickoff_timestamp
 ```
 
-Closing prices are an **outcome/market-reaction benchmark only**. They must never influence the original model direction.
+Stake does **not** infer or invent publication times. Missing timestamps and temporal violations are rejected.
+
+Run against a candidate CSV with explicit timestamps:
+
+```bash
+python scripts/run_provenance_audit.py path/to/candidate.csv
+```
+
+This is a feasibility audit, not a prediction model. A PASS means the dataset is structurally capable of supporting AH-04; it does not establish that a market inefficiency exists.
 
 ## Current scoreboard
 
@@ -83,7 +97,8 @@ Closing prices are an **outcome/market-reaction benchmark only**. They must neve
 | O/U-02 | Does larger O/U disagreement predict direction? | FAIL |
 | AH-01 | Does model-vs-AH gap identify value? | FAIL / INCONCLUSIVE |
 | AH-02 | Does exact Poisson AH settlement improve that? | FAIL |
-| AH-03 | Does model disagreement predict subsequent market repricing? | NEXT |
+| AH-03 | Does model disagreement predict subsequent market repricing? | FAIL |
+| AH-04-PROVENANCE-01 | Can information timing be proven without look-ahead? | IN PROGRESS — gate implemented |
 
 ## Falsification rule
 
