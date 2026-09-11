@@ -15,6 +15,12 @@ def _valid_odds(value: object) -> bool:
         return False
 
 
+def _fair_probs(row: dict[str, object], first: str, second: str) -> tuple[float | None, float | None]:
+    if not (_valid_odds(row.get(first)) and _valid_odds(row.get(second))):
+        return None, None
+    return fair_two_way_probability(float(row[first]), float(row[second]))
+
+
 def prepare_market_baseline(frame: pd.DataFrame) -> pd.DataFrame:
     """Create pre-match market probabilities and realized settlements.
 
@@ -25,79 +31,54 @@ def prepare_market_baseline(frame: pd.DataFrame) -> pd.DataFrame:
     validate_market_columns(frame)
     result = frame.copy()
 
-    ah_home_open_prob: list[float | None] = []
-    ah_away_open_prob: list[float | None] = []
-    ah_home_close_prob: list[float | None] = []
-    ah_away_close_prob: list[float | None] = []
-    ah_home_settlement: list[float | None] = []
-    ah_away_settlement: list[float | None] = []
+    columns: dict[str, list[float | None]] = {
+        "AHHomeOpenProb": [],
+        "AHAwayOpenProb": [],
+        "AHHomeCloseProb": [],
+        "AHAwayCloseProb": [],
+        "AHHomeSettlement": [],
+        "AHAwaySettlement": [],
+        "OUOverOpenProb": [],
+        "OUUnderOpenProb": [],
+        "OUOverCloseProb": [],
+        "OUUnderCloseProb": [],
+        "OUOverSettlement": [],
+        "OUUnderSettlement": [],
+    }
 
-    ou_over_open_prob: list[float | None] = []
-    ou_under_open_prob: list[float | None] = []
-    ou_over_close_prob: list[float | None] = []
-    ou_under_close_prob: list[float | None] = []
-    ou_over_settlement: list[float | None] = []
-    ou_under_settlement: list[float | None] = []
-
-    for row in result.itertuples(index=False):
-        # Asian Handicap opening market.
-        if all(_valid_odds(getattr(row, c)) for c in ("AvgAHH", "AvgAHA")):
-            p_home, p_away = fair_two_way_probability(float(row.AvgAHH), float(row.AvgAHA))
-        else:
-            p_home = p_away = None
-
-        # Closing AH fields are optional because some older files use a
-        # different schema. They are only calculated when all fields exist.
-        if all(hasattr(row, c) and _valid_odds(getattr(row, c)) for c in ("AvgCAHH", "AvgCAHA")):
-            p_close_home, p_close_away = fair_two_way_probability(float(row.AvgCAHH), float(row.AvgCAHA))
-        else:
-            p_close_home = p_close_away = None
+    for row in result.to_dict(orient="records"):
+        p_home, p_away = _fair_probs(row, "AvgAHH", "AvgAHA")
+        p_close_home, p_close_away = _fair_probs(row, "AvgCAHH", "AvgCAHA")
 
         if p_home is not None:
-            home_settle = asian_handicap_settlement(int(row.FTHG), int(row.FTAG), float(row.AHh))
+            home_settle = asian_handicap_settlement(int(row["FTHG"]), int(row["FTAG"]), float(row["AHh"]))
             away_settle = -home_settle
         else:
             home_settle = away_settle = None
 
-        ah_home_open_prob.append(p_home)
-        ah_away_open_prob.append(p_away)
-        ah_home_close_prob.append(p_close_home)
-        ah_away_close_prob.append(p_close_away)
-        ah_home_settlement.append(home_settle)
-        ah_away_settlement.append(away_settle)
+        columns["AHHomeOpenProb"].append(p_home)
+        columns["AHAwayOpenProb"].append(p_away)
+        columns["AHHomeCloseProb"].append(p_close_home)
+        columns["AHAwayCloseProb"].append(p_close_away)
+        columns["AHHomeSettlement"].append(home_settle)
+        columns["AHAwaySettlement"].append(away_settle)
 
-        # O/U 2.5 opening market.
-        if all(_valid_odds(getattr(row, c)) for c in ("Avg>2.5", "Avg<2.5")):
-            p_over, p_under = fair_two_way_probability(float(row._asdict()["Avg>2.5"]), float(row._asdict()["Avg<2.5"]))
-        else:
-            p_over = p_under = None
+        p_over, p_under = _fair_probs(row, "Avg>2.5", "Avg<2.5")
+        p_close_over, p_close_under = _fair_probs(row, "AvgC>2.5", "AvgC<2.5")
 
-        if all(hasattr(row, c) and _valid_odds(getattr(row, c)) for c in ("AvgC>2.5", "AvgC<2.5")):
-            p_close_over, p_close_under = fair_two_way_probability(
-                float(row._asdict()["AvgC>2.5"]), float(row._asdict()["AvgC<2.5"])
-            )
-        else:
-            p_close_over = p_close_under = None
+        columns["OUOverOpenProb"].append(p_over)
+        columns["OUUnderOpenProb"].append(p_under)
+        columns["OUOverCloseProb"].append(p_close_over)
+        columns["OUUnderCloseProb"].append(p_close_under)
+        columns["OUOverSettlement"].append(
+            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), True) if p_over is not None else None
+        )
+        columns["OUUnderSettlement"].append(
+            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), False) if p_under is not None else None
+        )
 
-        ou_over_open_prob.append(p_over)
-        ou_under_open_prob.append(p_under)
-        ou_over_close_prob.append(p_close_over)
-        ou_under_close_prob.append(p_close_under)
-        ou_over_settlement.append(over_under_25_settlement(int(row.FTHG), int(row.FTAG), True) if p_over is not None else None)
-        ou_under_settlement.append(over_under_25_settlement(int(row.FTHG), int(row.FTAG), False) if p_under is not None else None)
-
-    result["AHHomeOpenProb"] = ah_home_open_prob
-    result["AHAwayOpenProb"] = ah_away_open_prob
-    result["AHHomeCloseProb"] = ah_home_close_prob
-    result["AHAwayCloseProb"] = ah_away_close_prob
-    result["AHHomeSettlement"] = ah_home_settlement
-    result["AHAwaySettlement"] = ah_away_settlement
-    result["OUOverOpenProb"] = ou_over_open_prob
-    result["OUUnderOpenProb"] = ou_under_open_prob
-    result["OUOverCloseProb"] = ou_over_close_prob
-    result["OUUnderCloseProb"] = ou_under_close_prob
-    result["OUOverSettlement"] = ou_over_settlement
-    result["OUUnderSettlement"] = ou_under_settlement
+    for name, values in columns.items():
+        result[name] = values
 
     # Positive CLV probability means the market moved toward that side after
     # the opening price. This is a diagnostic metric, not a guarantee of profit.
