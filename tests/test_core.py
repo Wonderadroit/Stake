@@ -14,6 +14,7 @@ from stake.data import (
     validate_market_columns,
 )
 from stake.diagnostic import Hypothesis, diagnose
+from stake.market_baseline import prepare_market_baseline
 from stake.markets import MarketSnapshot, remove_overround
 
 
@@ -87,7 +88,6 @@ def test_asian_handicap_push():
 
 
 def test_asian_handicap_quarter_line_half_win():
-    # Home +0.25 in a draw = half win + push -> +0.5 overall.
     assert asian_handicap_settlement(1, 1, 0.25) == 0.5
 
 
@@ -95,6 +95,59 @@ def test_over_under_25_settlement():
     assert over_under_25_settlement(2, 1, over=True) == 1.0
     assert over_under_25_settlement(1, 1, over=True) == -1.0
     assert over_under_25_settlement(1, 1, over=False) == 1.0
+
+
+def test_market_baseline_normalizes_opening_prices():
+    frame = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(["2024-01-01"]),
+            "HomeTeam": ["A"],
+            "AwayTeam": ["B"],
+            "FTHG": [2],
+            "FTAG": [1],
+            "FTR": ["H"],
+            "AHh": [0.5],
+            "AvgAHH": [2.0],
+            "AvgAHA": [2.0],
+            "AvgCAHH": [1.8],
+            "AvgCAHA": [2.2],
+            "Avg>2.5": [2.0],
+            "Avg<2.5": [2.0],
+            "AvgC>2.5": [1.8],
+            "AvgC<2.5": [2.2],
+        }
+    )
+    result = prepare_market_baseline(frame)
+    assert result.loc[0, "AHHomeOpenProb"] == pytest.approx(0.5)
+    assert result.loc[0, "AHHomeSettlement"] == 1.0
+    assert result.loc[0, "OUOverSettlement"] == 1.0
+    assert result.loc[0, "AHHomeCLVProb"] > 0
+
+
+def test_market_baseline_preserves_missing_closing_price():
+    frame = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(["2024-01-01"]),
+            "HomeTeam": ["A"],
+            "AwayTeam": ["B"],
+            "FTHG": [0],
+            "FTAG": [0],
+            "FTR": ["D"],
+            "AHh": [0.0],
+            "AvgAHH": [2.0],
+            "AvgAHA": [2.0],
+            "Avg>2.5": [2.0],
+            "Avg<2.5": [2.0],
+            "AvgCAHH": [None],
+            "AvgCAHA": [None],
+            "AvgC>2.5": [None],
+            "AvgC<2.5": [None],
+        }
+    )
+    result = prepare_market_baseline(frame)
+    assert result.loc[0, "AHHomeOpenProb"] == pytest.approx(0.5)
+    assert pd.isna(result.loc[0, "AHHomeCloseProb"])
+    assert pd.isna(result.loc[0, "AHHomeCLVProb"])
 
 
 def test_load_real_historical_file_if_present():
