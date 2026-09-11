@@ -10,10 +10,45 @@ from stake.goal_model import add_rolling_goal_estimates
 
 
 @dataclass(frozen=True)
+class AHSettlementDistribution:
+    full_win: float
+    half_win: float
+    push: float
+    half_loss: float
+    full_loss: float
+
+    @property
+    def positive_settlement_probability(self) -> float:
+        return self.full_win + self.half_win
+
+    @property
+    def negative_settlement_probability(self) -> float:
+        return self.half_loss + self.full_loss
+
+    @property
+    def expected_settlement(self) -> float:
+        return (
+            self.full_win
+            + 0.5 * self.half_win
+            - 0.5 * self.half_loss
+            - self.full_loss
+        )
+
+    @property
+    def fair_decimal_odds(self) -> float | None:
+        positive = self.full_win + 0.5 * self.half_win
+        negative = 0.5 * self.half_loss + self.full_loss
+        if positive <= 0:
+            return None
+        return 1.0 + negative / positive
+
+
+@dataclass(frozen=True)
 class AHBucket:
     label: str
     observations: int
     mean_abs_gap: float
+    mean_model_ev: float
     positive_settlement_rate: float
     opening_roi: float
 
@@ -38,10 +73,10 @@ def _poisson_pmf(k: int, lam: float) -> float:
     return math.exp(-lam) * lam**k / math.factorial(k)
 
 
-def _expected_ah_settlement(
+def _ah_distribution(
     home_goals: float, away_goals: float, line: float, *, max_goals: int = 12
-) -> float:
-    """Expected net settlement for a 1-unit home AH stake under Poisson goals."""
+) -> AHSettlementDistribution:
+    """Calculate exact model probabilities for every AH settlement outcome."""
     if home_goals <= 0 or away_goals <= 0:
         raise ValueError("Expected goals must be positive")
     if max_goals < 1:
@@ -49,15 +84,29 @@ def _expected_ah_settlement(
 
     home_probs = [_poisson_pmf(k, home_goals) for k in range(max_goals + 1)]
     away_probs = [_poisson_pmf(k, away_goals) for k in range(max_goals + 1)]
-    return sum(
-        hp * ap * asian_handicap_settlement(hg, ag, line)
-        for hg, hp in enumerate(home_probs)
-        for ag, ap in enumerate(away_probs)
+    buckets = {1.0: 0.0, 0.5: 0.0, 0.0: 0.0, -0.5: 0.0, -1.0: 0.0}
+    for hg, hp in enumerate(home_probs):
+        for ag, ap in enumerate(away_probs):
+            settlement = asian_handicap_settlement(hg, ag, line)
+            buckets[settlement] += hp * ap
+
+    return AHSettlementDistribution(
+        full_win=buckets[1.0],
+        half_win=buckets[0.5],
+        push=buckets[0.0],
+        half_loss=buckets[-0.5],
+        full_loss=buckets[-1.0],
     )
 
 
+def _expected_ah_settlement(
+    home_goals: float, away_goals: float, line: float, *, max_goals: int = 12
+) -> float:
+    """Expected net settlement for a 1-unit home AH stake under Poisson goals."""
+    return _ah_distribution(home_goals, away_goals, line, max_goals=max_goals).expected_settlement
+
+
 def _expected_profit(expected_settlement: float, odds: float) -> float:
-    """Convert expected AH settlement into expected decimal-odds profit."""
     positive = max(expected_settlement, 0.0)
     negative = min(expected_settlement, 0.0)
     return positive * (odds - 1.0) + negative
@@ -75,13 +124,7 @@ def evaluate_ah_walk_forward(
     window: int = 10,
     min_ev: float = 0.03,
 ) -> AHEvaluation:
-    """Probe whether a walk-forward goal model disagrees usefully with AH.
-
-    Only matches strictly before each fixture are used to estimate expected
-    goals. Those estimates become a Poisson goal distribution, from which the
-    expected AH settlement and opening-price EV are calculated. Closing prices
-    and post-match statistics never enter the decision.
-    """
+    """Evaluate exact Poisson AH settlement probabilities walk-forward."""
     if window < 1:
         raise ValueError("window must be positive")
     if min_ev < 0:
@@ -105,22 +148,22 @@ def evaluate_ah_walk_forward(
         if not math.isfinite(line):
             continue
 
-        expected_home = _expected_ah_settlement(
+        distribution = _ah_distribution(
             float(row["ModelHomeGoals"]), float(row["ModelAwayGoals"]), line
         )
-        expected_away = -expected_home
-        actual_home = asian_handicap_settlement(
-            int(row["FTHG"]), int(row["FTAG"]), line
-        )
+        home_ev = _expected_profit(distribution.expected_settlement, home_odds)
+        away_ev = _expected_profit(-distribution.expected_settlement, away_odds)
+        actual_home = asian_handicap_settlement(int(row["FTHG"]), int(row["FTAG"]), line)
         gap = float(row["ModelHomeGoals"]) - float(row["ModelAwayGoals"]) - line
         rows.append(
             {
                 "gap": gap,
-                "home_ev": _expected_profit(expected_home, home_odds),
-                "away_ev": _expected_profit(expected_away, away_odds),
+                "home_ev": home_ev,
+                "away_ev": away_ev,
                 "actual_home": actual_home,
                 "home_odds": home_odds,
                 "away_odds": away_odds,
+                "expected_settlement": distribution.expected_settlement,
             }
         )
 
@@ -138,18 +181,21 @@ def evaluate_ah_walk_forward(
     for label, lower, upper in BUCKETS:
         selected = [r for r in rows if lower <= abs(r["gap"]) < upper]
         if not selected:
-            bucket_rows.append(AHBucket(label, 0, 0.0, 0.0, 0.0))
+            bucket_rows.append(AHBucket(label, 0, 0.0, 0.0, 0.0, 0.0))
             continue
 
         profits: list[float] = []
         positive = 0
+        evs: list[float] = []
         for item in selected:
             if item["gap"] >= 0:
                 settlement = item["actual_home"]
                 odds = item["home_odds"]
+                evs.append(item["home_ev"])
             else:
                 settlement = -item["actual_home"]
                 odds = item["away_odds"]
+                evs.append(item["away_ev"])
             positive += settlement > 0
             profits.append(_realized_profit(settlement, odds))
 
@@ -158,6 +204,7 @@ def evaluate_ah_walk_forward(
                 label=label,
                 observations=len(selected),
                 mean_abs_gap=sum(abs(r["gap"]) for r in selected) / len(selected),
+                mean_model_ev=sum(evs) / len(evs),
                 positive_settlement_rate=positive / len(selected),
                 opening_roi=sum(profits) / len(profits),
             )
