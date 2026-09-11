@@ -32,8 +32,8 @@ def test_rolling_estimates_do_not_use_current_result():
             "Time": ["15:00", "15:00", "15:00", "15:00"],
             "HomeTeam": ["A", "B", "A", "A"],
             "AwayTeam": ["B", "A", "B", "B"],
-            "FTHG": [2, 0, 100, 999],
-            "FTAG": [0, 1, 100, 999],
+            "FTHG": [2, 0, 3, 999],
+            "FTAG": [0, 1, 1, 999],
         }
     )
     result = add_rolling_goal_estimates(frame)
@@ -45,9 +45,9 @@ def test_rolling_estimates_do_not_use_current_result():
     # produce a complete estimate under the current venue-specific model.
     assert pd.isna(result.loc[1, "ModelTotalGoals"])
 
-    # The current fixture's 100-100 result must not affect its own estimate.
+    # The current fixture's 3-1 result must not affect its own estimate.
     assert result.loc[2, "ModelTotalGoals"] < 10
 
     # The deliberately absurd 999-999 result must not affect the
-    # estimate for the fourth fixture through future leakage.
+    # estimate for the fourth fixture because it is the current result.
     assert result.loc[3, "ModelTotalGoals"] < 10
