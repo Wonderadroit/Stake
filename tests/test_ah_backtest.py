@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from stake.ah_backtest import _expected_ah_settlement, evaluate_ah_walk_forward
+from stake.ah_backtest import _ah_distribution, _expected_ah_settlement, evaluate_ah_walk_forward
 
 
 def _frame() -> pd.DataFrame:
@@ -41,6 +41,30 @@ def _frame() -> pd.DataFrame:
 def test_expected_ah_settlement_respects_push_and_quarter_line():
     assert _expected_ah_settlement(0.8, 0.8, 0.0) == pytest.approx(0.0, abs=0.05)
     assert _expected_ah_settlement(1.5, 0.5, -0.25) > 0
+
+
+def test_distribution_probabilities_sum_to_truncated_poisson_mass():
+    result = _ah_distribution(1.2, 0.9, -0.25)
+    total = (
+        result.full_win
+        + result.half_win
+        + result.push
+        + result.half_loss
+        + result.full_loss
+    )
+    assert 0.999 < total <= 1.0
+    assert result.positive_settlement_probability == pytest.approx(
+        result.full_win + result.half_win
+    )
+    assert result.expected_settlement == pytest.approx(
+        result.full_win + 0.5 * result.half_win - 0.5 * result.half_loss - result.full_loss
+    )
+
+
+def test_fair_odds_are_defined_when_positive_settlement_mass_exists():
+    result = _ah_distribution(1.5, 0.8, -0.25)
+    assert result.fair_decimal_odds is not None
+    assert result.fair_decimal_odds > 1.0
 
 
 def test_ah_walk_forward_returns_fixed_buckets():
