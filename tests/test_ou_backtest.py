@@ -28,7 +28,8 @@ def test_walk_forward_evaluation_uses_opening_market_and_prior_history_only():
 
     result = evaluate_ou_walk_forward(frame, window=10, min_ev=0.03)
 
-    # The first fixture has no model history and must be skipped.
+    # Only the first fixture has no prior history. The second fixture can
+    # use all-venue fallback history, so four observations are evaluated.
     assert result.observations == 4
     assert 0 <= result.model_brier <= 1
     assert result.market_brier == pytest.approx(0.25)
