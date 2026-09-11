@@ -5,7 +5,7 @@ import re
 
 import pandas as pd
 
-from stake.ah04_metrics import asian_implied_probabilities, probability_displacement
+from stake.ah04_metrics import probability_displacement
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "raw" / "ah04" / "sample" / "sample" / "EPL" / "2024-2025"
@@ -32,11 +32,14 @@ KICKOFFS = {
 
 
 def fixture_id(path: Path) -> int:
-    return int(re.search(r"match_(\d+)\.csv$", path.name).group(1))
+    match = re.search(r"match_(\d+)\.csv$", path.name)
+    if not match:
+        raise ValueError(f"Could not parse fixture id from {path.name}")
+    return int(match.group(1))
 
 
 def parse_line(value: object) -> float | None:
-    s = str(value).strip().replace("/", "/")
+    s = str(value).strip()
     if not s or s.lower() == "nan":
         return None
     try:
@@ -50,23 +53,32 @@ def parse_line(value: object) -> float | None:
 
 def read_fixture(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
-    # Dataset uses these exact columns according to its published README.
     needed = ["Teams", "Bookmaker", "Home Odds", "Handicap", "Away Odds", "Timestamp"]
     missing = [c for c in needed if c not in df.columns]
     if missing:
         raise ValueError(f"{path.name} missing columns: {missing}")
     df = df[needed].copy()
-    df["timestamp"] = pd.to_datetime(df["Timestamp"].astype(str), format="%Y%m%d%H%M%S", utc=True, errors="coerce")
+    df["timestamp"] = pd.to_datetime(
+        df["Timestamp"].astype(str), format="%Y%m%d%H%M%S", utc=True, errors="coerce"
+    )
     df["home_price"] = pd.to_numeric(df["Home Odds"], errors="coerce")
     df["away_price"] = pd.to_numeric(df["Away Odds"], errors="coerce")
     df["line"] = df["Handicap"].map(parse_line)
-    return df.dropna(subset=["timestamp", "home_price", "away_price", "line"])
+    # Source rows are newest-to-oldest; temporal selection must be ascending.
+    return (
+        df.dropna(subset=["timestamp", "home_price", "away_price", "line"])
+        .sort_values(["Bookmaker", "timestamp"], kind="stable")
+        .reset_index(drop=True)
+    )
 
 
 def main() -> None:
     rows = []
     print("=== AH-04 V4 — NORMALIZED PROBABILITY PRE-KICKOFF SCAN ===")
-    print(f"Baseline: T-{BASELINE_MINUTES}m | max age: {MAX_BASELINE_AGE_MINUTES}m | stale: {STALE_MINUTES}m | threshold: {PRESSURE_THRESHOLD:.3f}")
+    print(
+        f"Baseline: T-{BASELINE_MINUTES}m | max age: {MAX_BASELINE_AGE_MINUTES}m | "
+        f"stale: {STALE_MINUTES}m | threshold: {PRESSURE_THRESHOLD:.3f}"
+    )
 
     for path in sorted(DATA.glob("round*_match_*.csv")):
         fid = fixture_id(path)
@@ -86,8 +98,9 @@ def main() -> None:
                 baselines[book] = tick
 
         base = {
-            "fixture": path.stem, "teams": str(pre["Teams"].iloc[0]) if not pre.empty else "",
-            "kickoff": kickoff, "status": "OK" if baselines else "INSUFFICIENT_BASELINE",
+            "fixture": path.stem,
+            "teams": str(pre["Teams"].iloc[0]) if not pre.empty else "",
+            "status": "OK" if baselines else "INSUFFICIENT_BASELINE",
             "books_seen": len(books), "books_with_baseline": len(baselines),
             "first_strong": pd.NaT, "first_very_strong": pd.NaT,
             "peak_time": pd.NaT, "peak_books": 0, "peak_direction": "",
@@ -96,13 +109,15 @@ def main() -> None:
             "event_class": "INSUFFICIENT_COVERAGE",
         }
         if not baselines:
-            rows.append(base); continue
+            rows.append(base)
+            continue
 
         start = kickoff - pd.Timedelta(minutes=BASELINE_MINUTES)
         end = kickoff - pd.Timedelta(seconds=1)
         grid = pd.date_range(start.floor("min"), end.floor("min"), freq="min", tz="UTC")
         peak_count = 0
         peak_dir = ""
+        peak_time = pd.NaT
         first_pressure = None
         first_line = None
         reversal = None
@@ -135,7 +150,7 @@ def main() -> None:
                 peak_count, peak_dir, peak_time = peak, direction, minute
             if peak >= STRONG_BOOKS and first_pressure is None:
                 first_pressure = minute
-            if peak >= VERY_STRONG_BOOKS and base["first_very_strong"] is pd.NaT:
+            if peak >= VERY_STRONG_BOOKS and pd.isna(base["first_very_strong"]):
                 base["first_very_strong"] = minute
 
             line_changed = 0
@@ -149,15 +164,20 @@ def main() -> None:
                     first_line = minute
 
             if first_pressure is not None and reversal is None:
-                if (direction == "HOME" and counts["AWAY"] >= STRONG_BOOKS) or (direction == "AWAY" and counts["HOME"] >= STRONG_BOOKS):
+                if (direction == "HOME" and counts["AWAY"] >= STRONG_BOOKS) or (
+                    direction == "AWAY" and counts["HOME"] >= STRONG_BOOKS
+                ):
                     reversal = minute
 
         base["first_strong"] = first_pressure if first_pressure is not None else pd.NaT
-        base["peak_time"] = peak_time if peak_count else pd.NaT
+        base["peak_time"] = peak_time
         base["peak_books"] = peak_count
         base["peak_direction"] = peak_dir
         base["first_line_change"] = first_line if first_line is not None else pd.NaT
-        base["pressure_to_line_min"] = ((first_line - first_pressure).total_seconds() / 60) if first_pressure is not None and first_line is not None else None
+        base["pressure_to_line_min"] = (
+            (first_line - first_pressure).total_seconds() / 60
+            if first_pressure is not None and first_line is not None else None
+        )
         base["reversal_time"] = reversal if reversal is not None else pd.NaT
         base["line_change_minutes"] = len(set(line_minutes))
         if peak_count >= VERY_STRONG_BOOKS:
@@ -176,7 +196,11 @@ def main() -> None:
 
     result = pd.DataFrame(rows)
     result.to_csv(OUT, index=False)
-    print(result[["fixture", "status", "books_seen", "books_with_baseline", "first_strong", "peak_time", "peak_books", "peak_direction", "first_line_change", "pressure_to_line_min", "reversal_time", "event_class"]].to_string(index=False))
+    print(result[[
+        "fixture", "status", "books_seen", "books_with_baseline", "first_strong",
+        "peak_time", "peak_books", "peak_direction", "first_line_change",
+        "pressure_to_line_min", "reversal_time", "event_class",
+    ]].to_string(index=False))
     print("\n=== SUMMARY ===")
     print("Fixtures:", len(result))
     print("Valid:", int((result.status == "OK").sum()))
