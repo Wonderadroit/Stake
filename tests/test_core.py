@@ -150,6 +150,32 @@ def test_market_baseline_preserves_missing_closing_price():
     assert pd.isna(result.loc[0, "AHHomeCLVProb"])
 
 
+def test_market_baseline_preserves_missing_asian_handicap_line():
+    frame = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(["2024-01-01"]),
+            "HomeTeam": ["A"],
+            "AwayTeam": ["B"],
+            "FTHG": [2],
+            "FTAG": [1],
+            "FTR": ["H"],
+            "AHh": [None],
+            "AvgAHH": [2.0],
+            "AvgAHA": [2.0],
+            "AvgCAHH": [1.8],
+            "AvgCAHA": [2.2],
+            "Avg>2.5": [2.0],
+            "Avg<2.5": [2.0],
+            "AvgC>2.5": [1.8],
+            "AvgC<2.5": [2.2],
+        }
+    )
+    result = prepare_market_baseline(frame)
+    assert result.loc[0, "AHHomeOpenProb"] == pytest.approx(0.5)
+    assert pd.isna(result.loc[0, "AHHomeSettlement"])
+    assert pd.isna(result.loc[0, "AHAwaySettlement"])
+
+
 def test_load_real_historical_file_if_present():
     path = Path("data/raw/E0_2223.csv")
     if not path.exists():
