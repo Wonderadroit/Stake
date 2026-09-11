@@ -19,44 +19,33 @@ def main() -> None:
     frame = load_seasons(paths)
     result = evaluate_ah_walk_forward(frame, window=10, min_ev=0.03)
 
-    print("=== STAKE AH-01 WALK-FORWARD DIAGNOSTIC PROBE ===")
+    print("=== STAKE AH-02 EXACT SETTLEMENT-PROBABILITY PROBE ===")
     print(f"Matches loaded: {len(frame)}")
     print(f"Valid AH observations: {result.observations}")
     print()
-    print("The model uses only matches before each fixture.")
-    print("AH settlement handles wins, half-wins, pushes, half-losses and losses.")
+    print("The model uses only matches strictly before each fixture.")
+    print("Poisson goals are converted directly into full/half/push AH outcomes.")
+    print("Opening odds are used only after the model distribution is frozen.")
     print("No closing price or post-match statistic is used for the decision.")
     print()
     print("GAP BUCKETS")
-    print("Magnitude | Observations | Mean abs gap | Positive settle | Opening ROI")
-    print("----------+--------------+--------------+-----------------+------------")
+    print("Magnitude | Observations | Mean abs gap | Mean model EV | Positive settle | Opening ROI")
+    print("----------+--------------+--------------+---------------+-----------------+------------")
     for bucket in result.buckets:
         print(
             f"{bucket.label:>9} | {bucket.observations:12d} | "
-            f"{bucket.mean_abs_gap:12.4f} | "
-            f"{bucket.positive_settlement_rate:15.2%} | "
-            f"{bucket.opening_roi:10.2%}"
+            f"{bucket.mean_abs_gap:12.4f} | {bucket.mean_model_ev:13.2%} | "
+            f"{bucket.positive_settlement_rate:15.2%} | {bucket.opening_roi:10.2%}"
         )
 
     print()
     print("MODEL-EV CANDIDATES")
-    print(f"Minimum EV: 3.0%")
+    print("Minimum EV: 3.0%")
     print(f"Count:      {result.candidate_bets}")
-    if result.candidate_roi is None:
-        print("ROI:        n/a")
-    else:
-        print(f"ROI:        {result.candidate_roi:.2%}")
-
+    print("ROI:        n/a" if result.candidate_roi is None else f"ROI:        {result.candidate_roi:.2%}")
     print()
-    nonempty = [b for b in result.buckets if b.observations]
-    if not nonempty:
-        print("VERDICT: no usable AH observations.")
-        return
-
-    if len(nonempty) >= 2 and nonempty[-1].opening_roi > nonempty[0].opening_roi:
-        print("VERDICT: larger model-vs-handicap gaps are not yet falsified; inspect before continuing.")
-    else:
-        print("VERDICT: larger model-vs-handicap gaps do not show a positive directional signal yet.")
+    print("Interpretation: the exact settlement distribution, not a directional score,")
+    print("determines model EV. This experiment is still a falsification probe, not a betting rule.")
 
 
 if __name__ == "__main__":
