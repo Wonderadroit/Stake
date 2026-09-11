@@ -22,27 +22,46 @@ The project must be willing to conclude that the idea does **not** work.
 - No automated wagering
 - No fabricated historical data
 
-## Current experiment
+## Experiment status
 
-The first diagnostic path is a deliberately simple O/U 2.5 model:
+### O/U-01 — simple goal model
 
-1. Estimate expected home and away goals from prior venue-specific results only.
-2. Convert expected total goals to `P(Over 2.5)` with a transparent Poisson calculation.
-3. Compare that probability with the opening market's fair probability.
-4. Evaluate chronologically on historical matches.
-5. Record candidate-bet ROI only when model probability implies at least 3% expected value at the opening price.
+A walk-forward expected-goals model was compared with the opening O/U 2.5 market.
 
-Run it locally after downloading the Football-Data season files into `data/raw/`:
+Result: **failed**. The model had worse Brier score and log loss than the market baseline, and model-EV candidates at a 3% threshold returned negative ROI.
+
+### O/U-02 — model/market disagreement
+
+The same walk-forward model was used only to choose direction from the gap between model probability and opening market probability. Disagreement was tested in fixed magnitude buckets.
+
+Result: **failed to show a useful directional relationship**. The largest disagreement bucket was materially worse than the smallest bucket, so disagreement magnitude was not treated as evidence of edge.
+
+These failures are retained deliberately. The project must not tune thresholds or add features merely to rescue a failed experiment.
+
+### AH-01 — walk-forward handicap diagnostic
+
+The next probe asks whether a simple pre-match goal model can identify useful disagreement with the opening Asian Handicap.
+
+1. Estimate expected home and away goals from matches strictly before each fixture.
+2. Convert those estimates into an independent Poisson goal distribution.
+3. Calculate expected Asian Handicap settlement for the published opening handicap, including quarter lines.
+4. Compare expected settlement with the actual opening price to identify model-EV candidates.
+5. Bucket model-vs-handicap expected-goal-margin gaps without optimizing the buckets from results.
+6. Evaluate realized AH settlement and opening-price ROI chronologically.
+
+Run locally after downloading the Football-Data season files into `data/raw/`:
 
 ```bash
-python scripts/run_ou_experiment.py
+python scripts/run_ah_experiment.py
 ```
 
-This is intentionally a falsification experiment, not a claim of profitability.
+AH settlement is treated correctly as win, half-win, push, half-loss, or loss. Closing prices and post-match statistics are excluded from the decision.
 
 ## Falsification rule
 
 If diagnostic reasoning does not improve out-of-sample calibration or market-relative performance over a simple baseline, stop expanding the system.
+
+A positive result in one bucket is not enough. Results must be robust, out-of-sample, economically meaningful, and survive pre-specified tests without threshold hunting.
 
 ## Design principle
 
