@@ -14,15 +14,13 @@ class AHBucket:
     label: str
     observations: int
     mean_abs_gap: float
-    win_rate: float
+    positive_settlement_rate: float
     opening_roi: float
 
 
 @dataclass(frozen=True)
 class AHEvaluation:
     observations: int
-    model_brier: float
-    market_brier: float
     candidate_bets: int
     candidate_roi: float | None
     buckets: tuple[AHBucket, ...]
@@ -51,16 +49,11 @@ def _expected_ah_settlement(
 
     home_probs = [_poisson_pmf(k, home_goals) for k in range(max_goals + 1)]
     away_probs = [_poisson_pmf(k, away_goals) for k in range(max_goals + 1)]
-    total = 0.0
-    mass = 0.0
-    for hg, hp in enumerate(home_probs):
-        for ag, ap in enumerate(away_probs):
-            p = hp * ap
-            mass += p
-            total += p * asian_handicap_settlement(hg, ag, line)
-    # The omitted tail is tiny at ordinary football scoring rates. Do not
-    # silently renormalize it; retaining the lost mass is conservative.
-    return total
+    return sum(
+        hp * ap * asian_handicap_settlement(hg, ag, line)
+        for hg, hp in enumerate(home_probs)
+        for ag, ap in enumerate(away_probs)
+    )
 
 
 def _expected_profit(expected_settlement: float, odds: float) -> float:
@@ -68,6 +61,12 @@ def _expected_profit(expected_settlement: float, odds: float) -> float:
     positive = max(expected_settlement, 0.0)
     negative = min(expected_settlement, 0.0)
     return positive * (odds - 1.0) + negative
+
+
+def _realized_profit(settlement: float, odds: float) -> float:
+    if settlement >= 0:
+        return settlement * (odds - 1.0)
+    return settlement
 
 
 def evaluate_ah_walk_forward(
@@ -78,10 +77,10 @@ def evaluate_ah_walk_forward(
 ) -> AHEvaluation:
     """Probe whether a walk-forward goal model disagrees usefully with AH.
 
-    The model sees only matches before each fixture. It converts expected goals
-    into a Poisson goal-difference distribution, then estimates AH settlement
-    against the opening handicap. No closing price or post-match statistic is
-    used for the decision.
+    Only matches strictly before each fixture are used to estimate expected
+    goals. Those estimates become a Poisson goal distribution, from which the
+    expected AH settlement and opening-price EV are calculated. Closing prices
+    and post-match statistics never enter the decision.
     """
     if window < 1:
         raise ValueError("window must be positive")
@@ -91,7 +90,7 @@ def evaluate_ah_walk_forward(
     ordered = frame.sort_values(["Date", "Time"], na_position="last").reset_index(drop=True)
     modeled = add_rolling_goal_estimates(ordered, window=window)
 
-    rows: list[dict[str, float | int | str]] = []
+    rows: list[dict[str, float]] = []
     for _, row in modeled.iterrows():
         if pd.isna(row["ModelHomeGoals"]) or pd.isna(row["ModelAwayGoals"]):
             continue
@@ -110,18 +109,15 @@ def evaluate_ah_walk_forward(
             float(row["ModelHomeGoals"]), float(row["ModelAwayGoals"]), line
         )
         expected_away = -expected_home
-        home_ev = _expected_profit(expected_home, home_odds)
-        away_ev = _expected_profit(expected_away, away_odds)
         actual_home = asian_handicap_settlement(
             int(row["FTHG"]), int(row["FTAG"]), line
         )
-
         gap = float(row["ModelHomeGoals"]) - float(row["ModelAwayGoals"]) - line
         rows.append(
             {
                 "gap": gap,
-                "home_ev": home_ev,
-                "away_ev": away_ev,
+                "home_ev": _expected_profit(expected_home, home_odds),
+                "away_ev": _expected_profit(expected_away, away_odds),
                 "actual_home": actual_home,
                 "home_odds": home_odds,
                 "away_odds": away_odds,
@@ -131,38 +127,12 @@ def evaluate_ah_walk_forward(
     if not rows:
         raise ValueError("No valid AH observations available for evaluation")
 
-    # A market-free diagnostic target: probability that the home side settles
-    # positively. Pushes and half outcomes are not treated as full wins.
-    model_scores: list[float] = []
-    outcomes: list[float] = []
     candidate_profits: list[float] = []
     for item in rows:
-        # Convert expected settlement to a bounded directional score. This is
-        # deliberately only a diagnostic score, not a claimed fair probability.
-        score = 0.5 + 0.5 * math.tanh(item["gap"])
-        model_scores.append(score)
-        actual = item["actual_home"]
-        outcomes.append(1.0 if actual > 0 else 0.0)
         if item["home_ev"] >= min_ev:
-            s = actual
-            candidate_profits.append(
-                s * (item["home_odds"] - 1.0) if s >= 0 else s
-            )
+            candidate_profits.append(_realized_profit(item["actual_home"], item["home_odds"]))
         elif item["away_ev"] >= min_ev:
-            s = -actual
-            candidate_profits.append(
-                s * (item["away_odds"] - 1.0) if s >= 0 else s
-            )
-
-    mean_brier = sum((p - y) ** 2 for p, y in zip(model_scores, outcomes)) / len(rows)
-    # The market probability comparator is intentionally simple: normalize the
-    # two opening prices, while the AH settlement itself remains non-binary.
-    market_scores: list[float] = []
-    for item in rows:
-        hp = 1.0 / item["home_odds"]
-        ap = 1.0 / item["away_odds"]
-        market_scores.append(hp / (hp + ap))
-    market_brier = sum((p - y) ** 2 for p, y in zip(market_scores, outcomes)) / len(rows)
+            candidate_profits.append(_realized_profit(-item["actual_home"], item["away_odds"]))
 
     bucket_rows: list[AHBucket] = []
     for label, lower, upper in BUCKETS:
@@ -170,26 +140,31 @@ def evaluate_ah_walk_forward(
         if not selected:
             bucket_rows.append(AHBucket(label, 0, 0.0, 0.0, 0.0))
             continue
-        wins = sum(r["actual_home"] > 0 if r["gap"] >= 0 else r["actual_home"] < 0 for r in selected)
+
         profits: list[float] = []
-        for r in selected:
-            settlement = r["actual_home"] if r["gap"] >= 0 else -r["actual_home"]
-            odds = r["home_odds"] if r["gap"] >= 0 else r["away_odds"]
-            profits.append(settlement * (odds - 1.0) if settlement >= 0 else settlement)
+        positive = 0
+        for item in selected:
+            if item["gap"] >= 0:
+                settlement = item["actual_home"]
+                odds = item["home_odds"]
+            else:
+                settlement = -item["actual_home"]
+                odds = item["away_odds"]
+            positive += settlement > 0
+            profits.append(_realized_profit(settlement, odds))
+
         bucket_rows.append(
             AHBucket(
-                label,
-                len(selected),
-                sum(abs(r["gap"]) for r in selected) / len(selected),
-                wins / len(selected),
-                sum(profits) / len(profits),
+                label=label,
+                observations=len(selected),
+                mean_abs_gap=sum(abs(r["gap"]) for r in selected) / len(selected),
+                positive_settlement_rate=positive / len(selected),
+                opening_roi=sum(profits) / len(profits),
             )
         )
 
     return AHEvaluation(
         observations=len(rows),
-        model_brier=mean_brier,
-        market_brier=market_brier,
         candidate_bets=len(candidate_profits),
         candidate_roi=(sum(candidate_profits) / len(candidate_profits)) if candidate_profits else None,
         buckets=tuple(bucket_rows),
