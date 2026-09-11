@@ -32,12 +32,28 @@ def _fair_probs(row: dict[str, object], first: str, second: str) -> tuple[float 
     return fair_two_way_probability(float(row[first]), float(row[second]))
 
 
+def _profit_from_settlement(settlement: float, odds: float) -> float:
+    """Return profit on a 1-unit bet from an AH/O-U settlement.
+
+    A full/half win earns the corresponding fraction of (odds - 1).
+    A push earns zero and a full/half loss loses the corresponding fraction
+    of the stake. This preserves Asian quarter-line settlement exactly.
+    """
+    if settlement > 0:
+        return settlement * (odds - 1.0)
+    return settlement
+
+
 def prepare_market_baseline(frame: pd.DataFrame) -> pd.DataFrame:
-    """Create pre-match market probabilities and realized settlements.
+    """Create pre-match market prices and realized settlements.
 
     Only opening/closing prices, match identity, and final result are used.
     Post-match statistics such as shots, corners, cards, and possession are
     deliberately ignored. Missing market observations remain missing.
+
+    Asian Handicap outcomes are retained as continuous settlements rather
+    than being coerced into binary wins. This preserves pushes, half-wins,
+    and half-losses for quarter-goal lines.
     """
     validate_market_columns(frame)
     result = frame.copy()
@@ -49,12 +65,16 @@ def prepare_market_baseline(frame: pd.DataFrame) -> pd.DataFrame:
         "AHAwayCloseProb": [],
         "AHHomeSettlement": [],
         "AHAwaySettlement": [],
+        "AHHomeOpenProfit": [],
+        "AHAwayOpenProfit": [],
         "OUOverOpenProb": [],
         "OUUnderOpenProb": [],
         "OUOverCloseProb": [],
         "OUUnderCloseProb": [],
         "OUOverSettlement": [],
         "OUUnderSettlement": [],
+        "OUOverOpenProfit": [],
+        "OUUnderOpenProfit": [],
     }
 
     for row in result.to_dict(orient="records"):
@@ -66,8 +86,11 @@ def prepare_market_baseline(frame: pd.DataFrame) -> pd.DataFrame:
                 int(row["FTHG"]), int(row["FTAG"]), float(row["AHh"])
             )
             away_settle = -home_settle
+            home_profit = _profit_from_settlement(home_settle, float(row["AvgAHH"]))
+            away_profit = _profit_from_settlement(away_settle, float(row["AvgAHA"]))
         else:
             home_settle = away_settle = None
+            home_profit = away_profit = None
 
         columns["AHHomeOpenProb"].append(p_home)
         columns["AHAwayOpenProb"].append(p_away)
@@ -75,23 +98,34 @@ def prepare_market_baseline(frame: pd.DataFrame) -> pd.DataFrame:
         columns["AHAwayCloseProb"].append(p_close_away)
         columns["AHHomeSettlement"].append(home_settle)
         columns["AHAwaySettlement"].append(away_settle)
+        columns["AHHomeOpenProfit"].append(home_profit)
+        columns["AHAwayOpenProfit"].append(away_profit)
 
         p_over, p_under = _fair_probs(row, "Avg>2.5", "Avg<2.5")
         p_close_over, p_close_under = _fair_probs(row, "AvgC>2.5", "AvgC<2.5")
+
+        over_settle = (
+            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), True)
+            if p_over is not None
+            else None
+        )
+        under_settle = (
+            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), False)
+            if p_under is not None
+            else None
+        )
 
         columns["OUOverOpenProb"].append(p_over)
         columns["OUUnderOpenProb"].append(p_under)
         columns["OUOverCloseProb"].append(p_close_over)
         columns["OUUnderCloseProb"].append(p_close_under)
-        columns["OUOverSettlement"].append(
-            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), True)
-            if p_over is not None
-            else None
+        columns["OUOverSettlement"].append(over_settle)
+        columns["OUUnderSettlement"].append(under_settle)
+        columns["OUOverOpenProfit"].append(
+            _profit_from_settlement(over_settle, float(row["Avg>2.5"])) if over_settle is not None else None
         )
-        columns["OUUnderSettlement"].append(
-            over_under_25_settlement(int(row["FTHG"]), int(row["FTAG"]), False)
-            if p_under is not None
-            else None
+        columns["OUUnderOpenProfit"].append(
+            _profit_from_settlement(under_settle, float(row["Avg<2.5"])) if under_settle is not None else None
         )
 
     for name, values in columns.items():
