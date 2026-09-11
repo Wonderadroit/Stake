@@ -64,27 +64,29 @@ def asian_handicap_settlement(home_goals: int, away_goals: int, line: float) -> 
     """Return settlement for a 1-unit home Asian Handicap bet.
 
     Returns +1 win, +0.5 half-win, 0 push, -0.5 half-loss, or -1 loss.
-    Quarter-goal lines are settled by splitting the stake across adjacent
-    half-goal lines. This function intentionally rejects unsupported lines.
+    Quarter-goal lines split the stake equally across the two adjacent
+    half-goal lines.
     """
     if not isinstance(home_goals, int) or not isinstance(away_goals, int):
         raise TypeError("Goals must be integers")
     if not -10 <= line <= 10:
         raise ValueError("Asian Handicap line is outside supported bounds")
 
-    margin = home_goals - away_goals + line
-    doubled = round(margin * 2)
-
-    if abs(margin - doubled / 2) > 1e-9:
+    # Asian handicap lines are normally multiples of 0.5 or 0.25.
+    quarter_units = round(line * 4)
+    if abs(line * 4 - quarter_units) > 1e-9:
         raise ValueError("Asian Handicap line must use half- or quarter-goal increments")
 
     # Quarter lines split the stake between the two adjacent half-goal lines.
-    if abs(line * 4 - round(line * 4)) < 1e-9 and int(round(line * 4)) % 2:
+    if quarter_units % 2:
         lower = line - 0.25
         upper = line + 0.25
-        return (asian_handicap_settlement(home_goals, away_goals, lower)
-                + asian_handicap_settlement(home_goals, away_goals, upper)) / 2
+        return (
+            asian_handicap_settlement(home_goals, away_goals, lower)
+            + asian_handicap_settlement(home_goals, away_goals, upper)
+        ) / 2
 
+    margin = home_goals - away_goals + line
     if margin > 0:
         return 1.0
     if margin == 0:
