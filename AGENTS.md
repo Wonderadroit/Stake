@@ -2,549 +2,566 @@
 
 This file is the operational contract for any AI agent, developer, or future ChatGPT session working on STAKE.
 
-Read `PROJECT_BIBLE.md` first. It defines the research mission and takes precedence over convenience, speculation, or architectural enthusiasm.
+**Read `PROJECT_BIBLE.md` first.** It is the research authority. This file defines how to execute that doctrine without inventing evidence or building architecture ahead of the experiment.
 
 ---
 
 ## 1. Mission
 
-STAKE is a **sports-betting market-behavior research engine**.
+STAKE is a sports-market behavior research engine.
 
-The job is to investigate observable market behavior and determine whether proposed signals survive historical testing, controls, and out-of-sample evaluation.
-
-Do not turn STAKE into a generic betting bot, tipster, guaranteed-profit engine, or unsupported "smart money detector."
-
----
-
-## 2. First Rule: Inspect Before Building
-
-Never start by adding a new module because the next idea sounds useful.
-
-Before changing code:
+The agent's job is to:
 
 ```text
-1. Read PROJECT_BIBLE.md
-2. Read AGENTS.md
-3. Check git status
-4. Check current branch
-5. Inspect recent commits
-6. Inspect relevant existing code
-7. Inspect existing tests
-8. Inspect current historical output
-9. State the exact hypothesis
-10. Define the control / falsification test
-11. Make the smallest justified change
+inspect → measure → falsify → validate → document
 ```
 
-If the current evidence does not justify the proposed feature, stop and say so.
+Do not turn STAKE into a generic betting bot, tipster, guaranteed-profit engine, or unsupported smart-money detector.
 
 ---
 
-## 3. Preserve the Current Research Thread
+## 2. Non-Negotiable Rules
 
-The current research thread is:
-
-```text
-bookmaker movement
-      ↓
-temporal ordering
-      ↓
-leader / follower
-      ↓
-convergence
-      ↓
-persistence / reversal
-      ↓
-closing line
-      ↓
-CLV
-      ↓
-ROI
-```
-
-The current question is whether leader/follower information propagation contains predictive information about subsequent market behavior.
-
-Do not replace this with a generic prediction model unless the research evidence requires it.
+1. **Evidence before explanation.**
+2. **Data integrity is a gate, not a footnote.**
+3. **Temporal ordering must be measurable before causal language is used.**
+4. **Effect size matters, not only statistical significance.**
+5. **Controls are mandatory for claimed structure.**
+6. **CLV is not ROI.**
+7. **ROI is not proof of durability.**
+8. **Future information must never define a signal.**
+9. **Raw data limitations must be reported explicitly.**
+10. **Never manufacture event counts, timestamps, leaders, or economic results.**
+11. **Do not optimize thresholds against the final evaluation sample.**
+12. **Do not build architecture that the current experiment does not require.**
+13. **Negative results are first-class research output.**
+14. **When a phenomenon cannot be distinguished because of timestamp resolution, classify it as simultaneous/ambiguous.**
+15. **Never call an odds movement proof of smart money.**
 
 ---
 
-## 4. Current Checkpoint
+## 3. Recovery Protocol
 
-As of 2026-09-11:
-
-- Repository: `Wonderadroit/Stake`
-- Main branch is the active working branch.
-- Latest known commit: `d40b2058e94310712ddd59c349042c7e4a46e5ea`
-- Latest commit message: `fix: make AH-04 V5 local events independent of T-180 coverage`
-- AH-04 V5 local event primitives exist.
-- V5.1 local scanning exists.
-- Raw sample data is local and intentionally excluded from GitHub.
-- Current local raw-data path:
-  `data/raw/ah04/sample/sample/EPL/2024-2025`
-- Current V5.1 result path:
-  `data/ah04_v5_1_scan.csv`
-
-### Immediate next task
-
-**Inspect the V5.1 historical output before implementing a leader/follower V6.**
-
-Do not skip this step.
-
----
-
-## 5. Required Recovery Procedure for a New Chat
-
-If a new ChatGPT session starts on this repository, it must recover state in this order:
+For a new session:
 
 ```bash
 cd ~/Stake
 git status
-git log --oneline -10
+git log --oneline -12
 git pull origin main
 pytest -q
-PYTHONPATH=. python scripts/run_ah04_v5_1.py
-ls -lh data/ah04_v5_1_scan.csv
 ```
 
-Then inspect the V5.1 output and report:
+Then read:
 
-- number of matches/events;
-- event-class distribution;
-- representative strong events;
-- first-mover information available in the data;
-- whether timestamps support propagation measurement;
-- what is still missing for a valid leader/follower experiment.
+```text
+PROJECT_BIBLE.md
+AGENTS.md
+relevant experiment code
+relevant tests
+current experiment outputs
+```
 
-Only after that should implementation begin.
-
----
-
-## 6. Experimental Build Protocol
-
-For every new research feature:
-
-### Step 1 — State the question
-
-Example:
-
-> Does the first bookmaker to make a sufficiently strong local move predict subsequent cross-book convergence better than a randomly selected bookmaker?
-
-### Step 2 — Define observables
-
-Specify exactly what can be measured at signal time.
-
-### Step 3 — Define the event
-
-Specify timestamps, thresholds, bookmaker identity, direction, and invalid cases.
-
-### Step 4 — Define controls
-
-At minimum, consider an appropriate random or baseline comparison.
-
-### Step 5 — Implement minimally
-
-Prefer one small module or one small scanner modification over a new framework.
-
-### Step 6 — Test
-
-Run unit tests and the historical experiment.
-
-### Step 7 — Inspect failures
-
-Do not hide strange cases. Investigate them.
-
-### Step 8 — Evaluate
-
-Measure the proposed effect and the controls.
-
-### Step 9 — Record the result
-
-State whether the hypothesis was:
-
-- supported provisionally;
-- weakened;
-- falsified;
-- inconclusive;
-- or requires more data.
-
-### Step 10 — Commit only coherent work
-
-The repository should remain understandable and reproducible after every meaningful checkpoint.
+Do not rely on memory when the repository can establish the state.
 
 ---
 
-## 7. Do Not Manufacture Events
+## 4. Research Gates
 
-Never lower a threshold simply because too few events were found.
+Every new market-signal branch follows this order:
 
-Never redefine an event after seeing which definition produces the most profitable historical results without a separate validation procedure.
+```text
+GATE 0  DATA INTEGRITY
+  ↓
+GATE 1  TEMPORAL STRUCTURE
+  ↓
+GATE 2  PREDICTIVE / PRICE EFFECT
+  ↓
+GATE 3  ECONOMIC VALUE
+  ↓
+GATE 4  OUT-OF-SAMPLE VALIDATION
+```
 
-Never add arbitrary fallback logic whose only purpose is to increase signal count.
+A later gate cannot rescue a failed earlier gate.
 
-Low event frequency may be the correct result.
+If Gate 0 fails, stop and fix/replace the data source.
 
-The research question is whether the phenomenon exists, not whether the scanner can produce an impressive number of rows.
+If Gate 1 fails, do not build a prediction or betting strategy on the supposed leader/follower structure.
+
+If Gate 2 fails, temporal ordering may exist but is not useful for the proposed prediction.
+
+If Gate 3 fails, retain the structure only as a research finding or redirect to a different market.
 
 ---
 
-## 8. Do Not Call It Smart Money
+## 5. Phase 0 — Timestamp Audit
 
-Do not write claims such as:
+Before implementing V6 or any new leader/follower engine, run the timestamp audit on actual local raw data.
+
+The audit must answer:
+
+- What does the timestamp mean?
+- What is its resolution?
+- How often are timestamps duplicated within a bookmaker?
+- How often do bookmakers share the same timestamp?
+- What are median/p95/p99 inter-observation gaps?
+- What fraction of candidate events can support 5s, 15s, 30s, 60s, 180s horizons?
+- Is bookmaker ordering actually observable?
+- Are there source/observation/ingestion clocks?
+- Are there polling/snapshot artifacts?
+- Is kickoff handling correct?
+
+### Required interpretation
+
+A timestamp field does **not** automatically mean the bookmaker changed its price at that exact instant.
+
+If only an observation timestamp exists, call it observation time.
+
+If source-event time is unavailable, record that limitation in every affected experiment.
+
+### Minimum output
+
+```text
+ROWS
+BOOKMAKERS
+FIXTURES
+TIMESTAMP_RESOLUTION
+DUPLICATE_RATE
+MEDIAN_GAP
+P95_GAP
+P99_GAP
+SAME_TIMESTAMP_RATE
+ORDERING_AMBIGUITY_RATE
+HORIZON_MEASURABILITY
+PROVENANCE_STATUS
+```
+
+Do not run the audit on a synthetic or guessed dataset and present it as historical evidence.
+
+---
+
+## 6. Phase 1 — Leader/Follower Test
+
+Only after Phase 0 establishes adequate resolution.
+
+Define a qualifying movement before seeing outcomes.
+
+A candidate leader is:
+
+> the first reliably observable bookmaker movement satisfying the fixed movement rule at time `t0`.
+
+Never define a leader as the bookmaker that eventually moved the most.
+
+For every candidate event retain:
+
+```text
+fixture
+market
+selection
+leader_book
+signal_time
+previous_time
+post_time
+movement_direction
+movement_size
+probability_change
+pre_event_dispersion
+follower_count
+follower_deltas
+```
+
+If two events cannot be ordered at the source resolution:
+
+```text
+SIMULTANEOUS / AMBIGUOUS
+```
+
+not `leader` and `follower`.
+
+---
+
+## 7. Controls
+
+A leader/follower result is not credible without alternative explanations.
+
+Use the smallest appropriate set, normally including:
+
+```text
+A  detected leader
+B  random bookmaker control
+C  consensus movement without leader identification
+D  simultaneous movement control
+E  isolated-book movement control
+F  time/bookmaker randomized null where valid
+```
+
+Controls must be constructed without future leakage.
+
+---
+
+## 8. Effect Size and Decay
+
+Every experiment must report market-unit effect size.
+
+Do not report only:
+
+```text
+p = 0.003
+```
+
+Also report something interpretable such as:
+
+```text
+median lead-lag = X seconds
+follower rate = Y%
+consensus displacement = Z percentage points
+CLV = Q units
+```
+
+Measure fixed horizons only when the data can resolve them.
+
+Preferred conceptual horizons:
+
+```text
++5s +15s +30s +60s +180s close
+```
+
+If resolution cannot support a horizon, output `NOT MEASURABLE`.
+
+Do not select the best-looking horizon after seeing results and call it confirmatory.
+
+---
+
+## 9. CLV / Economics
+
+Prepare the economic test before final Gate 2 evaluation.
+
+The agent must distinguish:
+
+```text
+TEMPORAL STRUCTURE
+PREDICTIVE EFFECT
+CLV
+EXECUTABILITY
+ROI
+```
+
+Never use a universal arbitrary CLV kill threshold.
+
+Economic assumptions must be tied to:
+
+- actual market;
+- price convention;
+- vig/commission;
+- latency;
+- limits;
+- slippage;
+- execution probability;
+- minimum practical edge.
+
+If those inputs are unavailable, mark the economic result `NOT MEASURED`.
+
+---
+
+## 10. Cross-Market Protocol
+
+Do not move to another sport simply because it sounds softer.
+
+Once a common method is frozen, compare:
+
+1. EPL 1X2 — benchmark/control.
+2. Championship 1X2 — secondary-market candidate.
+3. Men's Grand Slam match winner — two-outcome candidate.
+
+The same core definitions must be preserved.
+
+No sport-specific threshold tuning before the common comparison is complete.
+
+A market may be promoted only if evidence shows better:
+
+- timestamp quality;
+- temporal structure;
+- effect size;
+- persistence/decay;
+- CLV;
+- execution feasibility.
+
+---
+
+## 11. "Smart Money" Language Rule
+
+Never write:
 
 ```text
 odds moved → smart money entered
 ```
 
-Use cautious research terminology:
+Allowed:
 
+- market repricing;
 - price-discovery candidate;
-- informed-money candidate;
 - leader/follower event;
+- informed-money candidate;
 - persistent convergence;
 - reversal;
-- isolated-book movement;
-- market repricing.
+- isolated-book movement.
 
-A causal explanation requires evidence beyond the movement itself.
+The explanation must remain probabilistic unless independent evidence identifies information arrival or order flow.
 
 ---
 
-## 9. Temporal Integrity
+## 12. Leakage Rules
 
-Never use future information to define a signal.
+A signal at time `t0` may use only information available at or before `t0`.
 
-A signal at time `t` may only use information available at or before `t`.
+Forbidden signal inputs:
 
-Do not use:
-
-- closing line;
-- match result;
+- closing price;
 - future bookmaker movements;
+- match outcome;
+- post-event consensus;
 - future injury/news information;
-- future market consensus;
+- future leader identity.
 
-when defining an event that is claimed to predict those variables.
-
-The close is an evaluation target, not a hidden signal input.
+The closing line is an evaluation target.
 
 ---
 
-## 10. Leader Definition
+## 13. Existing Code Preservation
 
-A bookmaker is not a leader merely because it has the most extreme final movement.
+Inspect before replacing.
 
-A candidate leader should be defined using information available at the first relevant movement time.
-
-The experiment should preserve:
-
-- exact timestamp;
-- bookmaker identity;
-- pre-move quote;
-- post-move quote;
-- movement direction;
-- movement magnitude;
-- elapsed time to next bookmaker;
-- number of followers;
-- convergence behavior.
-
-If timestamps do not support a reliable distinction between two bookmakers, classify them as simultaneous or ambiguous rather than inventing an ordering.
-
----
-
-## 11. Controls Are Mandatory
-
-For a leader/follower experiment, consider at least:
+Known AH-04 components:
 
 ```text
-A. detected leader
-B. random bookmaker control
-C. consensus movement without leader identification
-D. simultaneous movement control
-E. isolated-book movement control
+stake/ah04.py
+stake/ah04_metrics.py
+stake/ah04_v5.py
+stake/ah_market_reaction.py
+scripts/run_ah04_v5.py
+scripts/run_ah04_v5_1.py
+tests/test_ah04.py
 ```
 
-The exact controls may change with the data, but a claimed edge must have a credible alternative explanation tested against it.
+Historical experiments must remain reproducible unless there is a demonstrated correctness issue.
+
+Do not create duplicate abstractions merely to rename existing functions.
 
 ---
 
-## 12. Historical Data First
+## 14. Current V5/V5.1 State
 
-STAKE is an empirical project.
+V5/V5.1 local movement primitives exist.
 
-Do not rely on simulated data to claim that a market phenomenon exists.
+Current pressure threshold:
 
-Simulation may be used to validate implementation mechanics, but historical timestamped market data is required to evaluate the real hypothesis.
+```text
+0.015
+```
 
-Whenever possible, test across:
+Do not lower it to manufacture events.
 
-- multiple fixtures;
-- multiple bookmakers;
-- multiple dates;
-- multiple market regimes;
-- held-out periods.
+Recent temporal output with overwhelmingly `OVERLAPPING` observations is treated as a resolution/data-semantics warning, not proof of causality.
+
+The repository's raw AH-04 sample is intentionally gitignored:
+
+```text
+data/raw/ah04/sample/sample/EPL/2024-2025
+```
+
+Therefore a GitHub-only session cannot truthfully claim to have run the raw timestamp audit.
 
 ---
 
-## 13. Tests Before Claims
+## 15. Current Execution Order
 
-Every code change must preserve or improve test coverage.
+The immediate work sequence is now fixed:
 
-At minimum:
+```text
+1. Timestamp/provenance audit
+2. Freeze measurable resolution
+3. Define leader event
+4. Define controls
+5. Run leader/follower structure test
+6. Measure effect + decay
+7. Evaluate CLV
+8. Evaluate realistic economics
+9. Hold out later data
+10. Decide: KILL / RESEARCH FINDING / REDIRECT / PROCEED
+```
+
+Do not jump to V6 architecture before step 1.
+
+---
+
+## 16. Timebox
+
+The movement-research branch is timeboxed to approximately 4–6 focused weeks.
+
+The goal is a decision, not a giant taxonomy.
+
+If the clean experiment fails, stop expanding that branch.
+
+---
+
+## 17. Build Protocol
+
+For every implementation request:
+
+### A. Inspect
+
+Check status, history, relevant files, tests, and outputs.
+
+### B. State the exact question
+
+One sentence. If it cannot be stated clearly, do not code.
+
+### C. Define observables
+
+Specify what exists at signal time.
+
+### D. Define null/control
+
+Specify what would count as failure.
+
+### E. Implement minimally
+
+Prefer one script/module/test set over a framework.
+
+### F. Test software
 
 ```bash
 pytest -q
 ```
 
-For relevant experiments, also run the actual scanner and inspect its generated output.
+### G. Run the historical experiment
 
-A green unit-test suite does not prove the market hypothesis.
+Use real local historical data.
 
-A profitable historical sample does not prove the market hypothesis.
+### H. Inspect failures and edge cases
 
-Both software correctness and research validity must be checked separately.
+Do not suppress anomalies merely because they are inconvenient.
 
----
+### I. Report
 
-## 14. Formula Changes Require Evidence
+Use the required experiment report format.
 
-Do not change probability, odds, handicap, or settlement formulas casually.
+### J. Commit coherent work
 
-Before changing a formula:
-
-1. inspect raw examples;
-2. establish the dataset convention;
-3. explain the current formula;
-4. implement tests;
-5. compare historical results before/after;
-6. document comparability implications.
-
-Never silently invalidate earlier experiments.
+The repository should remain recoverable from Git after each checkpoint.
 
 ---
 
-## 15. Existing Code Is Evidence
-
-Before replacing an existing component, determine why it exists.
-
-Relevant current modules include:
-
-- `stake/ah04.py`
-- `stake/ah04_metrics.py`
-- `stake/ah04_v5.py`
-- `stake/ah_market_reaction.py`
-- `scripts/run_ah04_v5.py`
-- `scripts/run_ah04_v5_1.py`
-- `tests/test_ah04.py`
-
-Do not duplicate existing functionality without a clear reason.
-
-Do not delete an old experiment merely because a newer experiment is preferred. Historical experiments are part of the research record unless there is a demonstrated correctness problem.
-
----
-
-## 16. Repository Hygiene
-
-Raw data remains outside Git when intentionally gitignored.
-
-Do not commit:
-
-- `.venv/`
-- `__pycache__/`
-- `.pytest_cache/`
-- large raw datasets;
-- generated outputs unless they are intentionally part of the repository artifact;
-- secrets or credentials.
-
-Keep experiment outputs reproducible through scripts and documentation.
-
----
-
-## 17. No Architecture for Architecture's Sake
-
-Avoid creating:
-
-- unnecessary abstractions;
-- generic frameworks before the experiment is understood;
-- speculative configuration systems;
-- large class hierarchies;
-- unused interfaces;
-- multiple layers that merely rename the same operation.
-
-The preferred implementation is the smallest one that can answer the research question reliably.
-
----
-
-## 18. How to Interpret Results
-
-Use language proportional to evidence.
-
-### Stronger
-
-> "The leader/follower event showed higher subsequent closing-line movement than the specified controls in the tested sample."
-
-### Weaker
-
-> "The result is consistent with price discovery, but causality is not established."
-
-### Do not say
-
-> "We proved smart money moved the market."
-
-Unless a future experiment genuinely establishes something stronger, STAKE should remain conservative.
-
----
-
-## 19. Required Experiment Report
-
-After a meaningful experiment, report:
+## 18. Required Experiment Report
 
 ```text
+QUESTION:
 HYPOTHESIS:
-
 DATASET:
-
+DATA INTEGRITY:
+TIMESTAMP RESOLUTION:
 SAMPLE SIZE:
-
 EVENT DEFINITION:
-
-CONTROL(S):
-
-RESULT:
-
-CLV RESULT:
-
-ROI RESULT:
-
-OUT-OF-SAMPLE RESULT:
-
+CONTROLS:
+PRIMARY EFFECT:
+EFFECT SIZE:
+DECAY:
+CLV:
+EXECUTION ASSUMPTIONS:
+ROI:
+OUT-OF-SAMPLE:
 FAILURE CASES:
-
 INTERPRETATION:
-
 DECISION:
-
-NEXT EXPERIMENT:
+NEXT ACTION:
 ```
 
-If a metric is unavailable, say `NOT YET MEASURED`. Do not invent it.
+Never fill a field with an invented value.
 
 ---
 
-## 20. When the User Says "Continue"
+## 19. "Continue" Protocol
 
-When instructed to continue, do not interpret that as permission to build indefinitely.
+When the user says `continue`, continue the current research thread only until the next defensible checkpoint.
 
-Continue the **current research thread** until the next defensible checkpoint.
+Do not interpret `continue` as permission to build indefinitely.
 
-The agent should stop after reaching a meaningful state such as:
+Stop at:
 
-- implementation complete;
-- tests complete;
-- historical experiment complete;
-- result interpreted;
-- checkpoint documented.
+- a completed implementation;
+- a completed experiment;
+- a decisive failure;
+- a data blocker;
+- or a documented checkpoint.
 
-If the next step requires missing data or an unresolved definition, stop at the blocker and state exactly what is missing.
-
----
-
-## 21. When the User Says "Do It All"
-
-Complete all steps that can be responsibly completed without fabricating evidence.
-
-This means:
-
-- inspect;
-- implement;
-- test;
-- run historical data;
-- analyze;
-- document.
-
-It does **not** mean:
-
-- invent data;
-- claim unmeasured ROI;
-- pretend a local sample represents the entire market;
-- bypass controls;
-- manufacture positive results.
+If data is missing, say exactly what is missing and give the shortest command needed to provide it.
 
 ---
 
-## 22. Definition of Done
+## 20. "Do It All" Protocol
 
-A research feature is not done merely because the code runs.
-
-It is done when:
+When the user says `do it all`, complete every responsible step available:
 
 ```text
-code
- ↓
-tests
- ↓
-historical experiment
- ↓
-controls
- ↓
-result
- ↓
-interpretation
- ↓
-reproducible checkpoint
+inspect
+implement
+test
+run
+analyze
+document
 ```
 
-has been completed to the extent supported by available data.
+But never:
+
+- invent raw data;
+- fabricate timestamps;
+- claim unmeasured ROI;
+- bypass controls;
+- turn a descriptive movement into a causal claim;
+- claim a market-wide conclusion from a small sample.
 
 ---
 
-## 23. Current Next Action
+## 21. Definition of Done
 
-**Do not implement V6 yet.**
+A research feature is done only when the evidence chain is complete to the extent the data permits:
 
-First inspect the actual V5.1 output generated from the local raw dataset.
-
-Run:
-
-```bash
-cd ~/Stake
-git pull origin main
-pytest -q
-PYTHONPATH=. python scripts/run_ah04_v5_1.py
-
-python - <<'PY'
-import pandas as pd
-p = "data/ah04_v5_1_scan.csv"
-df = pd.read_csv(p)
-print("=== EVENT CLASSES ===")
-print(df["event_class"].value_counts(dropna=False).to_string())
-print("\n=== EVENTS ===")
-cols = [
-    "fixture", "teams", "peak_books_1m", "peak_direction_1m",
-    "first_line_change", "pressure_before_line",
-    "line_before_pressure", "event_class"
-]
-print(df[cols].to_string(index=False))
-PY
+```text
+CODE
+ ↓
+TESTS
+ ↓
+HISTORICAL RUN
+ ↓
+CONTROLS
+ ↓
+EFFECT
+ ↓
+INTERPRETATION
+ ↓
+REPRODUCIBLE CHECKPOINT
 ```
 
-Then inspect representative raw timestamp sequences for the strongest events.
-
-Only after that should the leader/follower event definition be finalized.
+A green test suite means the software is behaving as coded. It does not prove the market hypothesis.
 
 ---
 
-## 24. Recovery Principle
+## 22. Recovery Principle
 
-If context is lost, do not guess what STAKE was doing.
+If context is lost:
 
-Read:
+```text
+PROJECT_BIBLE.md
+↓
+AGENTS.md
+↓
+git history
+↓
+current tests
+↓
+current data/output
+↓
+resume from evidence
+```
 
-1. `PROJECT_BIBLE.md`
-2. `AGENTS.md`
-3. recent git history
-4. current tests
-5. current experiment output
-
-Then resume from the documented checkpoint.
-
-**The repository and its evidence are the source of truth.**
+**The repository and measured data are the source of truth.**
