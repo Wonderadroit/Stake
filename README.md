@@ -36,26 +36,54 @@ The same walk-forward model was used only to choose direction from the gap betwe
 
 Result: **failed to show a useful directional relationship**. The largest disagreement bucket was materially worse than the smallest bucket, so disagreement magnitude was not treated as evidence of edge.
 
-These failures are retained deliberately. The project must not tune thresholds or add features merely to rescue a failed experiment.
+### AH-00 — market baseline
 
-### AH-01 — walk-forward handicap diagnostic
+The opening AH market was measured before adding any diagnostic model. Across the five-season sample, the market showed the expected bookmaker drag and near-zero average AH closing-value movement. This is the reference point for all AH diagnostics.
 
-The next probe asks whether a simple pre-match goal model can identify useful disagreement with the opening Asian Handicap.
+### AH-01 — walk-forward handicap gap probe
 
-1. Estimate expected home and away goals from matches strictly before each fixture.
-2. Convert those estimates into an independent Poisson goal distribution.
-3. Calculate expected Asian Handicap settlement for the published opening handicap, including quarter lines.
-4. Compare expected settlement with the actual opening price to identify model-EV candidates.
-5. Bucket model-vs-handicap expected-goal-margin gaps without optimizing the buckets from results.
-6. Evaluate realized AH settlement and opening-price ROI chronologically.
+A simple pre-match goal model was compared with the opening Asian Handicap using model expected-margin minus the published handicap.
 
-Run locally after downloading the Football-Data season files into `data/raw/`:
+Result: **failed/inconclusive as an edge generator**. Large disagreement did not translate into better realized ROI, and the initial proxy was not accepted as a probability model.
+
+### AH-02 — exact settlement distribution
+
+AH-01 was hardened by replacing the directional proxy with an exact Poisson scoreline distribution mapped into full-win, half-win, push, half-loss and full-loss settlement probabilities.
+
+Result: **failed**. The largest model-vs-handicap gap bucket had strongly negative model EV, and the broad 3% model-EV candidate set was not profitable enough to establish an edge. No threshold tuning or ML rescue was performed.
+
+### AH-03 — opening → closing market reaction
+
+The next diagnostic asks a narrower causal question: when the pre-match model disagrees with the opening AH, does the market subsequently reprice in that model's direction?
+
+The test:
+
+1. Build the goal model strictly from matches before the fixture.
+2. Compare model expected margin with the **opening** AH line.
+3. Freeze that disagreement and its direction.
+4. Measure only afterward whether normalized home/away AH probability moves from opening to closing in the predicted direction.
+5. Bucket the result by fixed disagreement magnitude.
+
+The standard Football-Data E0 files provide one AH handicap line plus opening and closing AH prices, but not a separate closing handicap line. Therefore AH-03 measures subsequent repricing through normalized two-way probability rather than inventing a closing handicap.
+
+Run locally:
 
 ```bash
-python scripts/run_ah_experiment.py
+python scripts/run_ah_reaction.py
 ```
 
-AH settlement is treated correctly as win, half-win, push, half-loss, or loss. Closing prices and post-match statistics are excluded from the decision.
+Closing prices are an **outcome/market-reaction benchmark only**. They must never influence the original model direction.
+
+## Current scoreboard
+
+| Experiment | Question | Status |
+|---|---|---|
+| AH-00 | Is there an obvious blind AH market edge? | DONE — no trivial edge |
+| O/U-01 | Does a simple goal model beat O/U market? | FAIL |
+| O/U-02 | Does larger O/U disagreement predict direction? | FAIL |
+| AH-01 | Does model-vs-AH gap identify value? | FAIL / INCONCLUSIVE |
+| AH-02 | Does exact Poisson AH settlement improve that? | FAIL |
+| AH-03 | Does model disagreement predict subsequent market repricing? | NEXT |
 
 ## Falsification rule
 
